@@ -16,24 +16,24 @@ import (
 )
 
 type Cmp struct {
-	Name		string
-	IsExpose	bool
-	SystemName	string
-	Path		string
-	Html		[]string
-	Js			[]string
-	Use			[]string
-	FlexiPages	[]string
+	Name       string
+	IsExpose   bool
+	SystemName string
+	Path       string
+	Html       []string
+	Js         []string
+	Use        []string
+	FlexiPages []string
 }
 
 type FlexiPage struct {
-	Path	string
-	Name	string
+	Path string
+	Name string
 }
 
 type LightningComponentBundle struct {
-	XMLName		xml.Name	`xml:"LightningComponentBundle"`
-	IsExposed	bool		`xml:"isExposed"`
+	XMLName   xml.Name `xml:"LightningComponentBundle"`
+	IsExposed bool     `xml:"isExposed"`
 }
 
 func main() {
@@ -41,7 +41,15 @@ func main() {
 	graphLayer := flag.String("l", "dot", "layer for graphviz\nSupport: circo, dot, fdp, neato, nop, nop1, nop2, osage, patchwork, sfdp, twopi\n")
 	flag.Parse()
 
-	projectDir := "/Users/mmorozov/Rpaas/mm2-rpaas"
+	args := os.Args[1:]
+
+	projectDir := args[0]
+
+	if projectDir == "" {
+		fmt.Printf("Please specify project dir\n")
+		return
+	}
+
 	lwcDir := projectDir + "/force-app/main/default/lwc"
 	flexiPagesDir := projectDir + "/force-app/main/default/flexipages"
 
@@ -76,7 +84,7 @@ func main() {
 				content, err := ioutil.ReadFile(e.Path + "/" + f)
 
 				if err != nil {
-					fmt.Printf("Cannot open %s", e.Path + "/" + f)
+					fmt.Printf("Cannot open %s", e.Path+"/"+f)
 				}
 
 				if reSystemName.Match(content) {
@@ -89,7 +97,7 @@ func main() {
 				content, err := ioutil.ReadFile(e.Path + "/" + f)
 
 				if err != nil {
-					fmt.Printf("Cannot open %s", e.Path + "/" + f)
+					fmt.Printf("Cannot open %s", e.Path+"/"+f)
 				}
 
 				if reImportJs.Match(content) {
@@ -307,13 +315,13 @@ func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, layer string) {
 
 	for _, cmp := range cmpList {
 		if len(cmp.Use) > 0 {
-			for _,c := range cmp.Use {
-				graph.CreateEdge(cmp.Name + " > " + c, mapNodes[cmp.Name], mapNodes[c])
+			for _, c := range cmp.Use {
+				graph.CreateEdge(cmp.Name+" > "+c, mapNodes[cmp.Name], mapNodes[c])
 			}
 		}
 		if len(cmp.FlexiPages) > 0 {
-			for _,c := range cmp.FlexiPages {
-				graph.CreateEdge(cmp.Name + " > " + c, mapNodes[cmp.Name], mapNodes[c])
+			for _, c := range cmp.FlexiPages {
+				graph.CreateEdge(cmp.Name+" > "+c, mapNodes[cmp.Name], mapNodes[c])
 			}
 		}
 	}
