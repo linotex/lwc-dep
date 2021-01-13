@@ -24,9 +24,15 @@ type Cmp struct {
 	Js         []string
 	Use        []string
 	FlexiPages []string
+	AuraCmp    []string
 }
 
 type FlexiPage struct {
+	Path string
+	Name string
+}
+
+type AuraCmp struct {
 	Path string
 	Name string
 }
@@ -52,6 +58,7 @@ func main() {
 
 	lwcDir := projectDir + "/force-app/main/default/lwc"
 	flexiPagesDir := projectDir + "/force-app/main/default/flexipages"
+	auraDir := projectDir + "/force-app/main/default/aura"
 
 	_, err := os.Stat(lwcDir)
 	if os.IsNotExist(err) {
@@ -65,6 +72,12 @@ func main() {
 		flexiPages, _ = ReadFlexiPages(flexiPagesDir)
 	}
 
+	auraComponents := []*AuraCmp{}
+	_, err = os.Stat(auraDir)
+	if !os.IsNotExist(err) {
+		auraComponents, _ = ReadAuraComponents(auraDir)
+	}
+
 	cmpList := []*Cmp{}
 	cmpList = ReadComponents(lwcDir, cmpList)
 
@@ -76,7 +89,8 @@ func main() {
 	for _, cmp := range cmpList {
 
 		reName := regexp.MustCompile(cmp.Name)
-		reSystemName := regexp.MustCompile("\\<" + strings.ReplaceAll(cmp.SystemName, "-", "\\-") + "\\s")
+		reSystemName := regexp.MustCompile("\\<" + strings.ReplaceAll(cmp.SystemName, "-", "\\-") + "(\\s|\\>)")
+		reAuraSystemName := regexp.MustCompile("\\<c\\:" + cmp.Name + "(\\s|\\>)")
 		reImportJs := regexp.MustCompile("from\\s*[\\\"']c/" + cmp.Name + "[\"']\\s*\\;")
 
 		for _, e := range cmpList {
@@ -121,6 +135,21 @@ func main() {
 			}
 		}
 
+		if len(auraComponents) > 0 {
+			for _, f := range auraComponents {
+				content, err := ioutil.ReadFile(f.Path)
+
+				if err != nil {
+					fmt.Printf("Cannot read %s\n", f.Path)
+					continue
+				}
+
+				if reAuraSystemName.Match(content) {
+					cmp.AuraCmp = append(cmp.AuraCmp, f.Name)
+				}
+			}
+		}
+
 		if false {
 			fmt.Println(cmp.Name)
 			fmt.Printf("\tIs Expose:\t%t\n", cmp.IsExpose)
@@ -142,11 +171,15 @@ func main() {
 			for _, s := range cmp.FlexiPages {
 				fmt.Printf("\t    - %s\n", s)
 			}
+			fmt.Printf("\tAura:\n")
+			for _, s := range cmp.AuraCmp {
+				fmt.Printf("\t    - %s\n", s)
+			}
 			fmt.Println("----------------")
 		}
 	}
 
-	GenerateGraph(cmpList, flexiPages, *graphLayer)
+	GenerateGraph(cmpList, flexiPages, auraComponents, *graphLayer)
 }
 
 func ReadComponents(dirname string, cmpList []*Cmp) []*Cmp {
@@ -192,9 +225,34 @@ func ReadFlexiPages(path string) ([]*FlexiPage, error) {
 
 	for _, f := range listOfFiles {
 		files = append(files, &FlexiPage{
-			Path: path + "/" + f.Name(),
+			Path: path + "/" + f.Name(), //path to file
 			Name: strings.ReplaceAll(f.Name(), ".flexipage-meta.xml", ""),
 		})
+	}
+
+	return files, nil
+}
+
+func ReadAuraComponents(path string) ([]*AuraCmp, error) {
+	listOfFiles, err := ReadDir(path)
+
+	if err != nil {
+		fmt.Printf("Cannot read %s\n", path)
+		return []*AuraCmp{}, err
+	}
+
+	files := []*AuraCmp{}
+
+	for _, f := range listOfFiles {
+		pathToFile := path + "/" + f.Name() + "/" + f.Name() + ".cmp"
+
+		_, err = os.Stat(pathToFile)
+		if !os.IsNotExist(err) {
+			files = append(files, &AuraCmp{
+				Path: pathToFile,
+				Name: f.Name(), //name aura component dir
+			})
+		}
 	}
 
 	return files, nil
@@ -283,7 +341,7 @@ func ReadDir(dirname string) ([]os.FileInfo, error) {
 	return list, nil
 }
 
-func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, layer string) {
+func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, auraComponents []*AuraCmp, layer string) {
 
 	fmt.Println("Start build graph")
 	fmt.Printf("    Layout: %s\n", layer)
@@ -303,13 +361,31 @@ func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, layer string) {
 
 	//Creating all nodes
 	for _, cmp := range cmpList {
-		mapNodes[cmp.Name], _ = graph.CreateNode(cmp.Name)
+
+		e, _ := graph.CreateNode(cmp.Name)
+
+		if len(cmp.Use) == 0 && len(cmp.FlexiPages) == 0 && len(cmp.AuraCmp) == 0 {
+			e.SetFillColor("#ff2000")
+			e.SetColor("#ff2000")
+			e.SetFontColor("#ff2000")
+		}
+
+		mapNodes[cmp.Name] = e
 	}
+
 	for _, p := range flexiPages {
 		e, _ := graph.CreateNode(p.Name)
 		e.SetFillColor("#3d8bff")
 		e.SetColor("#3d8bff")
 		e.SetFontColor("#3d8bff")
+		mapNodes[p.Name] = e
+	}
+
+	for _, p := range auraComponents {
+		e, _ := graph.CreateNode(p.Name)
+		e.SetFillColor("#32a852")
+		e.SetColor("#32a852")
+		e.SetFontColor("#32a852")
 		mapNodes[p.Name] = e
 	}
 
@@ -321,6 +397,11 @@ func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, layer string) {
 		}
 		if len(cmp.FlexiPages) > 0 {
 			for _, c := range cmp.FlexiPages {
+				graph.CreateEdge(cmp.Name+" > "+c, mapNodes[cmp.Name], mapNodes[c])
+			}
+		}
+		if len(cmp.AuraCmp) > 0 {
+			for _, c := range cmp.AuraCmp {
 				graph.CreateEdge(cmp.Name+" > "+c, mapNodes[cmp.Name], mapNodes[c])
 			}
 		}
