@@ -356,6 +356,8 @@ func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, auraComponents []*Au
 		return
 	}
 	graph.SetLayout(layer)
+	graph.SetRankSeparator(10)
+	graph.SetNodeSeparator(1.5)
 
 	mapNodes := make(map[string]*cgraph.Node)
 
