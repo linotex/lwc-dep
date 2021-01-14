@@ -45,20 +45,20 @@ type LightningComponentBundle struct {
 func main() {
 
 	graphLayer := flag.String("l", "dot", "layer for graphviz\nSupport: circo, dot, fdp, neato, nop, nop1, nop2, osage, patchwork, sfdp, twopi\n")
+	projectDir := flag.String("p", "", "path to project")
+	debug := flag.Bool("d", false, "debug information")
+	filterCmp := flag.String("cmp", "", "filter by specific component")
+
 	flag.Parse()
 
-	args := os.Args[1:]
-
-	projectDir := args[0]
-
-	if projectDir == "" {
+	if *projectDir == "" {
 		fmt.Printf("Please specify project dir\n")
 		return
 	}
 
-	lwcDir := projectDir + "/force-app/main/default/lwc"
-	flexiPagesDir := projectDir + "/force-app/main/default/flexipages"
-	auraDir := projectDir + "/force-app/main/default/aura"
+	lwcDir := *projectDir + "/force-app/main/default/lwc"
+	flexiPagesDir := *projectDir + "/force-app/main/default/flexipages"
+	auraDir := *projectDir + "/force-app/main/default/aura"
 
 	_, err := os.Stat(lwcDir)
 	if os.IsNotExist(err) {
@@ -150,7 +150,7 @@ func main() {
 			}
 		}
 
-		if false {
+		if *debug {
 			fmt.Println(cmp.Name)
 			fmt.Printf("\tIs Expose:\t%t\n", cmp.IsExpose)
 			fmt.Printf("\tSystem Name:\t%s\n", cmp.SystemName)
@@ -179,7 +179,7 @@ func main() {
 		}
 	}
 
-	GenerateGraph(cmpList, flexiPages, auraComponents, *graphLayer)
+	GenerateGraph(cmpList, flexiPages, auraComponents, *graphLayer, *filterCmp)
 }
 
 func ReadComponents(dirname string, cmpList []*Cmp) []*Cmp {
@@ -341,10 +341,14 @@ func ReadDir(dirname string) ([]os.FileInfo, error) {
 	return list, nil
 }
 
-func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, auraComponents []*AuraCmp, layer string) {
+func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, auraComponents []*AuraCmp, layer string, filterCmp string) {
 
 	fmt.Println("Start build graph")
 	fmt.Printf("    Layout: %s\n", layer)
+
+	if filterCmp != "" {
+		fmt.Printf("    Filter by: %s\n", filterCmp)
+	}
 
 	tStart := time.Now()
 
@@ -361,8 +365,31 @@ func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, auraComponents []*Au
 
 	mapNodes := make(map[string]*cgraph.Node)
 
+	usesCmp := map[string]bool{}
+	usesFlexiPage := map[string]bool{}
+	usesAura := map[string]bool{}
+	if filterCmp != "" {
+		for _, cmp := range cmpList {
+			if cmp.Name == filterCmp {
+				for _, use := range cmp.Use {
+					usesCmp[use] = true
+				}
+				for _, use := range cmp.FlexiPages {
+					usesFlexiPage[use] = true
+				}
+				for _, use := range cmp.AuraCmp {
+					usesAura[use] = true
+				}
+			}
+		}
+	}
+
 	//Creating all nodes
 	for _, cmp := range cmpList {
+
+		if filterCmp != "" && filterCmp != cmp.Name && !usesCmp[cmp.Name] {
+			continue
+		}
 
 		e, _ := graph.CreateNode(cmp.Name)
 
@@ -376,6 +403,11 @@ func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, auraComponents []*Au
 	}
 
 	for _, p := range flexiPages {
+
+		if filterCmp != "" && !usesFlexiPage[p.Name] {
+			continue
+		}
+
 		e, _ := graph.CreateNode(p.Name)
 		e.SetFillColor("#3d8bff")
 		e.SetColor("#3d8bff")
@@ -384,6 +416,11 @@ func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, auraComponents []*Au
 	}
 
 	for _, p := range auraComponents {
+
+		if filterCmp != "" && !usesAura[p.Name] {
+			continue
+		}
+
 		e, _ := graph.CreateNode(p.Name)
 		e.SetFillColor("#32a852")
 		e.SetColor("#32a852")
@@ -392,6 +429,11 @@ func GenerateGraph(cmpList []*Cmp, flexiPages []*FlexiPage, auraComponents []*Au
 	}
 
 	for _, cmp := range cmpList {
+
+		if filterCmp != "" && filterCmp != cmp.Name {
+			continue
+		}
+
 		if len(cmp.Use) > 0 {
 			for _, c := range cmp.Use {
 				graph.CreateEdge(cmp.Name+" > "+c, mapNodes[cmp.Name], mapNodes[c])
