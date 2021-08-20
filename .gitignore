@@ -1,5 +1,5 @@
 .idea
-lwc-dep
-main
 *.png
 *.svg
+bin
+!bin/.gitkeep

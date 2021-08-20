@@ -15,6 +15,8 @@ import (
 	"github.com/goccy/go-graphviz"
 )
 
+const VERSION = "0.1"
+
 type Cmp struct {
 	Name       string
 	IsExpose   bool
@@ -48,8 +50,20 @@ func main() {
 	projectDir := flag.String("p", "", "path to project")
 	debug := flag.Bool("d", false, "debug information")
 	filterCmp := flag.String("cmp", "", "filter by specific component")
+	help := flag.Bool("h", false, "print help screen")
+	version := flag.Bool("v", false, "version")
 
 	flag.Parse()
+
+	if *help {
+		flag.Usage()
+		return
+	}
+
+	if *version {
+		fmt.Println("Version is ", VERSION)
+		return
+	}
 
 	if *projectDir == "" {
 		fmt.Printf("Please specify project dir\n")
